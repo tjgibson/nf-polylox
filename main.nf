@@ -3,7 +3,7 @@
 log.info """
 	PolyLox barcode processing pipeline
 	===================================
-	bam_file: ${params.bam_file}
+	samplesheet: ${params.samplesheet}
 	results_dir: ${params.results_dir}
 	"""
 	.stripIndent()
@@ -14,19 +14,19 @@ log.info """
  */
 
 process bam2fastq {
-	
+	tag "$meta.sample_id"
 	conda "bioconda::pbtk=3.1.1"
 	container = "quay.io/biocontainers/pbtk:3.1.1--h9ee0642_0"
 	
 	input:
-	tuple val(sample_id), path(bam)
+	tuple val(meta), path(bam), path(bam_index)
 	
 	output:
-	path "sample.fastq"
+	tuple val(meta), path("*.fastq")
 	
 	script:
     """
-    bam2fastq -u -o sample ${bam[0]}
+    bam2fastq -u -o $meta.sample_id $bam
     """
 }
 
@@ -53,8 +53,16 @@ process parse_polylox_barcodes {
 }
 
 workflow {
-	bam_ch = Channel.fromFilePairs(params.bam_file , checkIfExists: true)
-	
+	bam_ch = Channel.fromPath(params.samplesheet)
+	| splitCsv( header:true )
+    | map { row ->
+        meta = row.subMap('sample_id')
+        [
+        	meta, 
+        	file(row.bam_file, checkIfExists: true),
+            file(row.pbi_index, checkIfExists: true)]
+    }
+       
     bam2fastq(bam_ch)
-    parse_polylox_barcodes(bam2fastq.out)
+//     parse_polylox_barcodes(bam2fastq.out)
 }
