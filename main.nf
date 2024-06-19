@@ -22,7 +22,7 @@ process bam2fastq {
 	tuple val(meta), path(bam), path(bam_index)
 	
 	output:
-	tuple val(meta), path("*.fastq")
+	tuple val(meta), path("${meta.sample_id}.fastq")
 	
 	script:
     """
@@ -30,27 +30,50 @@ process bam2fastq {
     """
 }
 
+/*
+ * split fastq files into parts for faster processing
+ */
+
+process split_fastq {
+	tag "$meta.sample_id"
+	conda "bioconda::seqkit=2.8.2"
+	container = "quay.io/biocontainers/seqkit:2.8.2--h9ee0642_0"
+
+	input:
+	tuple val(meta), path(fastq)
+	
+	output:
+	tuple val(meta), path("*.fastq")
+	
+	script:
+    """
+    seqkit split2 $fastq -s $params.fastq_splitSize -o $meta.sample_id -O .
+    """
+
+}
+
 // /*
 //  * run published scRPBPBR pipeline on split fastq files
 //  */
 
 process parse_polylox_barcodes {
+	tag "$meta.sample_id"
+	conda "bioconda::bowtie2=2.4.4,samtools=1.13"
+	container = "quay.io/biocontainers/mulled-v2-c742dccc9d8fabfcff2af0d8d6799dbc711366cf:b6524911af823c7c52518f6c886b86916d062940-0"
+
 
 	input:
-	path "sample.fastq"
+	tuple val(meta), path(fastq)
 	
 	output:
-	path "sample.seg_assemble.tsv"
-	path "sample.PB_per_BC.summary.tsv"
-	path "sample.stat.tsv"
+	tuple val(meta), path("*.seg_assemble.tsv"), path("*.PB_per_BC.summary.tsv"), path("*.stat.tsv")
 	
 	script:
 	"""
-	touch sample.seg_assemble.tsv
-	touch sample.PB_per_BC.summary.tsv
-	touch sample.stat.tsv	
+	scRPBPBR $fastq sample fastq
 	"""
 }
+
 
 workflow {
 	bam_ch = Channel.fromPath(params.samplesheet)
@@ -63,6 +86,15 @@ workflow {
             file(row.pbi_index, checkIfExists: true)]
     }
        
-    bam2fastq(bam_ch)
+    fq_ch = bam2fastq(bam_ch)
+    
+    split_fq_ch = split_fastq(fq_ch)
+    .transpose()
+    
+    polylox_ch = parse_polylox_barcodes(split_fq_ch)
+    | view
+    
+    
+    
 //     parse_polylox_barcodes(bam2fastq.out)
 }
