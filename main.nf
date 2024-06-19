@@ -66,7 +66,7 @@ process parse_polylox_barcodes {
 	tuple val(meta), path(fastq)
 	
 	output:
-	tuple val(meta), path("*.seg_assemble.tsv"), path("*.PB_per_BC.summary.tsv"), path("*.stat.tsv")
+	tuple val(meta), path("*.seg_assemble.tsv"), path("*.stat.tsv")
 	
 	script:
 	"""
@@ -74,6 +74,43 @@ process parse_polylox_barcodes {
 	"""
 }
 
+process merge_polylox_barcodes {
+	tag "$meta.sample_id"
+	publishDir params.results_dir, mode: 'copy'
+	container = "rocker/tidyverse:4.4.1"
+	
+	input:
+	tuple val(meta),  path("input/*.seg_assemble.tsv"), path("input/*.stat.tsv")
+	
+	output:
+	tuple val(meta), path("${meta.sample_id}_merged.seg_assemble.tsv"), path("${meta.sample_id}_merged.stat.tsv")
+	
+	script:
+	"""
+	cat input/*.seg_assemble.tsv > ${meta.sample_id}_merged.seg_assemble.tsv
+	merge_stats.R $meta.sample_id
+	"""
+
+}
+
+process compute_pgen {
+	tag "$meta.sample_id"
+	publishDir params.results_dir, mode: 'copy'
+	container = "community.wave.seqera.io/library/pip_polyloxpgen:d2ac367a6df9753f"
+	
+	input:
+	tuple val(meta), path("${meta.sample_id}_merged.seg_assemble.tsv"), path("${meta.sample_id}_merged.stat.tsv")
+	
+	output:
+	tuple val(meta), path("${meta.sample_id}_pgen.txt")
+	
+	script:
+	"""
+	pgen.py ${meta.sample_id}_merged.stat.tsv $meta.sample_id
+	"""
+
+
+}
 
 workflow {
 	bam_ch = Channel.fromPath(params.samplesheet)
@@ -92,9 +129,7 @@ workflow {
     .transpose()
     
     polylox_ch = parse_polylox_barcodes(split_fq_ch)
-    | view
-    
-    
-    
-//     parse_polylox_barcodes(bam2fastq.out)
+    | groupTuple
+    | merge_polylox_barcodes
+    | compute_pgen
 }
