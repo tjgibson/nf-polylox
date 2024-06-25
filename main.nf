@@ -22,11 +22,11 @@ process bam2fastq {
 	tuple val(meta), path(bam), path(bam_index)
 	
 	output:
-	tuple val(meta), path("${meta.sample_id}.fastq")
+	tuple val(meta), path("${meta.sample_id}.fastq.gz")
 	
 	script:
     """
-    bam2fastq -u -o $meta.sample_id $bam
+    bam2fastq -o $meta.sample_id $bam
     """
 }
 
@@ -43,7 +43,7 @@ process split_fastq {
 	tuple val(meta), path(fastq)
 	
 	output:
-	tuple val(meta), path("*.fastq")
+	tuple val(meta), path("*.fastq.gz")
 	
 	script:
     """
@@ -70,7 +70,9 @@ process parse_polylox_barcodes {
 	
 	script:
 	"""
-	scRPBPBR $fastq sample fastq
+	gunzip -k $fastq
+	scRPBPBR ${fastq.baseName} sample fastq
+	rm ${fastq.baseName}
 	"""
 }
 
@@ -113,15 +115,26 @@ process compute_pgen {
 }
 
 workflow {
+// 	bam_ch = Channel.fromPath(params.samplesheet)
+// 	| splitCsv( header:true )
+//     | map { row ->
+//         meta = row.subMap('sample_id')
+//         [
+//         	meta, 
+//         	file(row.bam_file, checkIfExists: true),
+//             file(row.pbi_index, checkIfExists: true)]
+//     }
+
 	bam_ch = Channel.fromPath(params.samplesheet)
 	| splitCsv( header:true )
     | map { row ->
         meta = row.subMap('sample_id')
         [
         	meta, 
-        	file(row.bam_file, checkIfExists: true),
-            file(row.pbi_index, checkIfExists: true)]
+        	file(row.reads, checkIfExists: true),
+            file(row.read_index, checkIfExists: true)]
     }
+
        
     fq_ch = bam2fastq(bam_ch)
     
