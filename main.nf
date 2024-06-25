@@ -114,30 +114,36 @@ process compute_pgen {
 
 }
 
+
 workflow {
-// 	bam_ch = Channel.fromPath(params.samplesheet)
-// 	| splitCsv( header:true )
-//     | map { row ->
-//         meta = row.subMap('sample_id')
-//         [
-//         	meta, 
-//         	file(row.bam_file, checkIfExists: true),
-//             file(row.pbi_index, checkIfExists: true)]
-//     }
 
 	bam_ch = Channel.fromPath(params.samplesheet)
 	| splitCsv( header:true )
-    | map { row ->
-        meta = row.subMap('sample_id')
+	| filter { it["reads"].endsWith("bam") }
+    | map { bam_row ->
+        bam_meta = bam_row.subMap('sample_id')
         [
-        	meta, 
-        	file(row.reads, checkIfExists: true),
-            file(row.read_index, checkIfExists: true)]
+        	bam_meta, 
+        	file(bam_row.reads, checkIfExists: true),
+            file(bam_row.read_index, checkIfExists: true)]
     }
+
+	
+	fq_input_ch = Channel.fromPath(params.samplesheet)
+	| splitCsv( header:true )
+	| filter { it["reads"].endsWith("fastq.gz") }
+    | map { fq_row ->
+        fq_meta = fq_row.subMap('sample_id')
+        [
+        	fq_meta, 
+        	file(fq_row.reads, checkIfExists: true)]
+    }
+
 
        
     fq_ch = bam2fastq(bam_ch)
-    
+    .mix(fq_input_ch)
+
     split_fq_ch = split_fastq(fq_ch)
     .transpose()
     
