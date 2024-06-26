@@ -42,7 +42,7 @@ The `sample_id` column should contain a meaningful sample identifier.
 Now, you can run the pipeline using:
 
 ```bash
-nextflow run https://github.com/tjgibson/nf-polylox \
+nextflow run https://github.com/tjgibson/nf-polylox -r main \
     --samplesheet samplesheet.csv \
     --results_dir <RESULTSDIR> \
     -profile <docker/singularity/...>
@@ -68,7 +68,7 @@ A Table containing two columns: Polylox barcode, n_reads. This table summarizes 
 
 Table containing the generation probability for each Polylox barcode.
 
-Examples of output files can be found under `test_results`.
+Examples of output files can be found under `example_results`.
 
 ## To-do
 aIn the future, it might be nice to add some of the following features:
